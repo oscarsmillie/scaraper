@@ -2,9 +2,11 @@
   "name": "african-remote-jobs-scraper",
   "version": "1.0.0",
   "description": "Deployable Python scraper that collects African-remote job listings and inserts them into a Supabase table: `external_jobs`.",
-  "main": "index.js",
+  "main": "index.cjs",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "node-scraper": "node scrapers/playwright_scrapernode.js",
+    "python-scraper": "python main.py"
   },
   "repository": {
     "type": "git",
@@ -18,6 +20,14 @@
   },
   "homepage": "https://github.com/clikontent/scaraper#readme",
   "dependencies": {
-    "playwright": "^1.57.0"
+    "@supabase/supabase-js": "^2.108.2",
+    "axios": "^1.13.3",
+    "cheerio": "^1.2.0",
+    "dotenv": "^17.4.2",
+    "fast-xml-parser": "^5.10.1",
+    "html-to-text": "^10.0.0",
+    "node-fetch": "^2.7.0",
+    "playwright": "^1.57.0",
+    "xml2js": "^0.6.2"
   }
 }
