@@ -1,0 +1,3 @@
+# Run scraper twice daily at 2:00 AM and 2:00 PM Nairobi time
+0 2 * * * cd /app && /usr/local/bin/node /app/index.cjs >> /var/log/scraper/scraper.log 2>&1
+0 14 * * * cd /app && /usr/local/bin/node /app/index.cjs >> /var/log/scraper/scraper.log 2>&1

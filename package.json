@@ -5,7 +5,7 @@
   "main": "index.cjs",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "node-scraper": "node scrapers/playwright_scrapernode.js",
+    "node-scraper": "node index.cjs",
     "python-scraper": "python main.py"
   },
   "repository": {
@@ -21,6 +21,7 @@
   "homepage": "https://github.com/clikontent/scaraper#readme",
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
+    "@xmldom/xmldom": "^0.9.12",
     "axios": "^1.13.3",
     "cheerio": "^1.2.0",
     "dotenv": "^17.4.2",

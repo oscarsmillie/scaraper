@@ -17,7 +17,7 @@ const supabase = createClient(
 // =======================
 const API_URL =
   process.env.JOBICY_API ||
-  "https://jobicy.com/api/v2/remote-jobs?count=100";
+  "https://jobicy.com/api/v2/remote-jobs?count=200";
 
 const CHUNK_SIZE = 50;
 

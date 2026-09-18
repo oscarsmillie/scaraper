@@ -1,0 +1,16 @@
+node_modules
+.venv
+.git
+.gitignore
+
+npm-debug.log
+Dockerfile
+docker-compose.yml
+
+all_jobs.json
+
+.env
+.env.*
+!.env.example
+
+*.log

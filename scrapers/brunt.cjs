@@ -3,19 +3,39 @@ const cheerio = require("cheerio");
 const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
 
+// ======================================
+// SHARED FILTERS
+// ======================================
+
+const { shouldKeepJob } = require("./filters.cjs");
+
+// ======================================
+// SUPABASE
+// ======================================
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const SEARCH_URL = "https://www.bruntworkcareers.co/search?priority=High";
+// ======================================
+// CONFIG
+// ======================================
+
+const SEARCH_URL =
+  "https://www.bruntworkcareers.co/search?priority=High";
+
+// ======================================
+// HELPERS
+// ======================================
 
 function clean(text = "") {
   return text.replace(/\s+/g, " ").trim();
 }
 
 /**
- * Extract clean HTML while preserving structure (<p>, <ul>, <li>, <br>, <strong>)
+ * Extract clean HTML while preserving structure
+ * (<p>, <ul>, <li>, <br>, <strong>)
  * and stripping unwanted inline styling / script tags.
  */
 function cleanDescriptionHtml($, selector) {
@@ -23,31 +43,34 @@ function cleanDescriptionHtml($, selector) {
 
   if (!$el.length) return "";
 
-  // 1. Remove unwanted tags like scripts, styles, or hidden inputs
+  // Remove unwanted tags
   $el.find("script, style, input, button, iframe, svg").remove();
 
-  // 2. Remove inline attributes (style, class, id) that mess up frontend styling or dark mode
+  // Remove inline attributes
   $el.find("*").each((_, elem) => {
     $(elem).removeAttr("style");
     $(elem).removeAttr("class");
     $(elem).removeAttr("id");
   });
 
-  // 3. Get the HTML content
   let rawHtml = $el.html() || "";
 
-  // 4. Fallback: If no HTML tags were present, convert line breaks into <p> tags
+  // Fallback if no useful HTML structure exists
   if (!/<(p|ul|ol|li|br|div)\b[^>]*>/i.test(rawHtml)) {
     const plainText = $el.text().trim();
+
     return plainText
       .split(/\n{2,}/)
-      .map(p => `<p>${clean(p)}</p>`)
+      .map((p) => `<p>${clean(p)}</p>`)
       .join("");
   }
 
-  // Trim extra spaces between tags
   return rawHtml.replace(/>\s+</g, "><").trim();
 }
+
+// ======================================
+// GET JOB LINKS
+// ======================================
 
 async function getJobLinks() {
   const res = await fetch(SEARCH_URL, {
@@ -60,16 +83,19 @@ async function getJobLinks() {
 
   const ids = [
     ...new Set(
-      [...html.matchAll(/\/jobs\/(\d+)/g)]
-        .map(m => m[1])
+      [...html.matchAll(/\/jobs\/(\d+)/g)].map((m) => m[1])
     )
   ];
 
-  return ids.map(id => ({
+  return ids.map((id) => ({
     id,
     url: `https://www.bruntworkcareers.co/jobs/${id}`
   }));
 }
+
+// ======================================
+// GET JOB DETAILS
+// ======================================
 
 async function getJobDetails(job) {
   const res = await fetch(job.url, {
@@ -85,7 +111,6 @@ async function getJobDetails(job) {
     clean($("h1").first().text()) ||
     clean($("p.text-4xl").first().text());
 
-  // ✅ Extract structured HTML instead of plain squashed text
   const description =
     cleanDescriptionHtml($, ".job-description") ||
     cleanDescriptionHtml($, "main") ||
@@ -100,7 +125,7 @@ async function getJobDetails(job) {
     source: "BruntWork",
     title,
     company: "BruntWork",
-    description, // Now stores clean HTML with paragraphs, bullet points, and headers!
+    description,
     location: "Remote",
     job_type: "Contract",
     application_url: applyPath
@@ -115,34 +140,90 @@ async function getJobDetails(job) {
   };
 }
 
+// ======================================
+// CHUNK ARRAY
+// ======================================
+
 function chunkArray(arr, size) {
   const chunks = [];
+
   for (let i = 0; i < arr.length; i += size) {
     chunks.push(arr.slice(i, i + size));
   }
+
   return chunks;
 }
+
+// ======================================
+// SCRAPER
+// ======================================
 
 async function scrapeBruntwork() {
   console.log("Fetching BruntWork jobs...");
 
   const jobs = await getJobLinks();
+
   console.log(`Found ${jobs.length} jobs`);
 
   const normalized = [];
 
+  let kept = 0;
+  let rejected = 0;
+
   for (const job of jobs) {
     try {
       const details = await getJobDetails(job);
+
+      // ======================================
+      // SHARED KAZINEST FILTER
+      // ======================================
+
+      const keep = shouldKeepJob({
+        location: details.location,
+        remote: details.is_remote,
+        title: details.title
+      });
+
+      if (!keep) {
+        rejected++;
+
+        console.log(
+          `✗ Filtered: ${details.title} | ${details.location}`
+        );
+
+        continue;
+      }
+
       normalized.push(details);
+      kept++;
 
-      console.log(`✓ ${details.title}`);
+      console.log(
+        `✓ Kept: ${details.title} | ${details.location}`
+      );
 
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise((r) => setTimeout(r, 300));
+
     } catch (err) {
-      console.error(`Failed ${job.id}`, err.message);
+      console.error(
+        `Failed ${job.id}`,
+        err.message
+      );
     }
   }
+
+  console.log("");
+  console.log("======================================");
+  console.log("FILTER SUMMARY");
+  console.log("======================================");
+  console.log(`Found:    ${jobs.length}`);
+  console.log(`Kept:     ${kept}`);
+  console.log(`Rejected: ${rejected}`);
+  console.log("======================================");
+  console.log("");
+
+  // ======================================
+  // INSERT
+  // ======================================
 
   const chunks = chunkArray(normalized, 50);
 
@@ -150,18 +231,27 @@ async function scrapeBruntwork() {
     const { error } = await supabase
       .from("external_jobs")
       .upsert(chunks[i], {
-        onConflict: "external_id"
+        onConflict: "source,external_id"
       });
 
     if (error) {
-      console.error(`Chunk ${i + 1} failed`, error.message);
+      console.error(
+        `Chunk ${i + 1} failed`,
+        error.message
+      );
     } else {
-      console.log(`Inserted chunk ${i + 1}/${chunks.length}`);
+      console.log(
+        `Inserted chunk ${i + 1}/${chunks.length}`
+      );
     }
   }
 
   console.log("Done");
 }
+
+// ======================================
+// RUN
+// ======================================
 
 if (require.main === module) {
   scrapeBruntwork();

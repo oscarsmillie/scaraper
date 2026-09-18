@@ -161,7 +161,7 @@ async function scrapeTalentSafari() {
     const { error } = await supabase
       .from("external_jobs")
       .upsert(chunks[i], {
-        onConflict: "external_id",
+        onConflict: "source,external_id",
       });
 
     if (error) {
